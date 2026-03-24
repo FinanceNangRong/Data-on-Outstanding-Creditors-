@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ค้นหาข้อมูลเจ้าหนี้คงค้าง (Data on Outstanding Creditors)</title>
+    <!-- ใช้ Tailwind CSS สำหรับตกแต่ง UI -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- ใช้ PapaParse สำหรับอ่านไฟล์ CSV จาก Google Sheets -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <!-- ใช้ SheetJS สำหรับ Export เป็นไฟล์ Excel (.xlsx) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Prompt', sans-serif; }
+        .spinner {
+            border: 3px solid rgba(59, 130, 246, 0.1);
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border-left-color: #3b82f6;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        /* Custom scrollbar สำหรับตาราง */
+        .custom-scrollbar::-webkit-scrollbar { height: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-50 via-white to-blue-50/50 min-h-screen p-4 md:p-8 text-slate-800">
+
+    <div class="max-w-5xl mx-auto space-y-8">
+        
+        <!-- ส่วนหัว -->
+        <div class="text-center space-y-3 pt-4">
+            <img src="https://github.com/FinanceNangRong/Data-on-Outstanding-Creditors/raw/main/NRHOS.png" 
+                 alt="NRHOS Logo" 
+                 class="h-20 md:h-24 mx-auto mb-2 object-contain drop-shadow-md hover:scale-105 transition-transform duration-300"
+                 onerror="this.onerror=null; this.src='https://github.com/FinanceNangRong/Data-on-Outstanding-Creditors/raw/master/NRHOS.png';">
+            <h1 class="text-3xl md:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-700 to-indigo-600">ระบบค้นหาข้อมูลเจ้าหนี้คงค้าง</h1>
+            <p class="text-slate-500 font-medium tracking-wide uppercase text-sm">Data on Outstanding Creditors</p>
+        </div>
+
+        <!-- กล่องค้นหา -->
+        <div class="bg-white p-6 md:p-8 rounded-[2rem] shadow-xl shadow-slate-200/40 ring-1 ring-slate-100 max-w-4xl mx-auto">
+            <form id="searchForm" class="space-y-6">
+                
+                <!-- สถานะการโหลดข้อมูล -->
+                <div id="loadingStatus" class="flex items-center justify-center p-4 text-blue-600 bg-blue-50/80 rounded-2xl mb-4 border border-blue-100 backdrop-blur-sm">
+                    <div class="spinner mr-3"></div>
+                    <span class="font-medium animate-pulse">กำลังเชื่อมต่อฐานข้อมูล...</span>
+                </div>
+
+                <div class="grid grid-cols-1 gap-5">
+                    <!-- ช่องใส่ชื่อบริษัท (คอลัมน์ C) -->
+                    <div class="space-y-2">
+                        <label for="companyName" class="block text-sm font-semibold text-slate-700">ชื่อบริษัท / ร้านค้า</label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                <svg class="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                            </div>
+                            <input type="text" id="companyName" required disabled
+                                class="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400 font-medium text-slate-700"
+                                placeholder="กรอกชื่อบริษัทหรือร้านค้า...">
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" id="searchBtn" disabled
+                    class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:from-slate-300 disabled:to-slate-400 disabled:shadow-none text-white font-semibold py-3.5 rounded-xl transition-all duration-200 shadow-lg shadow-blue-600/20 transform hover:-translate-y-0.5 flex items-center justify-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    ค้นหาข้อมูล
+                </button>
+            </form>
+        </div>
+
+        <!-- กล่องแสดงผลลัพธ์ -->
+        <div id="resultContainer" class="hidden space-y-6 animate-[fadeIn_0.5s_ease-out]">
+            
+            <!-- ส่วนข้อมูลบริษัท -->
+            <div class="bg-white p-6 md:p-8 rounded-[2rem] shadow-xl shadow-slate-200/30 ring-1 ring-slate-100 relative overflow-hidden">
+                <!-- Decorative background shape -->
+                <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-full opacity-50 blur-2xl"></div>
+                
+                <div class="flex items-center mb-4">
+                    <div class="bg-emerald-100 p-2 rounded-lg mr-3">
+                        <svg class="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </div>
+                    <h2 class="text-xl font-bold text-slate-800">ข้อมูลผู้เสียภาษี</h2>
+                </div>
+                
+                <div class="bg-slate-50 rounded-2xl p-5 border border-slate-100 mb-6">
+                    <h3 class="text-2xl font-bold text-blue-800" id="displayCompanyName">-</h3>
+                    <div class="mt-2 flex items-center text-slate-600">
+                        <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path></svg>
+                        <span>เลขประจำตัวผู้เสียภาษี: <span id="displayTaxId" class="font-semibold text-slate-900 ml-1">-</span></span>
+                    </div>
+                </div>
+
+                <!-- ส่วนสรุปยอดแยกสถานะ -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-rose-50/50 p-4 rounded-xl border border-rose-100 flex flex-col justify-between">
+                        <span class="text-[0.7rem] md:text-xs font-semibold text-rose-600 mb-1 leading-tight flex items-center"><span class="w-4 flex justify-center mr-1 text-sm">+</span> มีหนี้ในระบบฯ<br>แต่ไม่สามารถวางบิลได้</span>
+                        <span id="sumEmpty" class="text-lg md:text-xl font-bold text-rose-700 mt-2 break-all">0.00</span>
+                    </div>
+                    <div class="bg-blue-50/50 p-4 rounded-xl border border-blue-100 flex flex-col justify-between">
+                        <span class="text-[0.7rem] md:text-xs font-semibold text-blue-600 mb-1 leading-tight flex items-center"><span class="w-4 flex justify-center mr-1 text-sm">+</span> มีเอกสาร<br>สามารถวางบิลได้</span>
+                        <span id="sumHasDoc" class="text-lg md:text-xl font-bold text-blue-700 mt-2 break-all">0.00</span>
+                    </div>
+                    <div class="bg-amber-50/50 p-4 rounded-xl border border-amber-100 flex flex-col justify-between">
+                        <span class="text-[0.7rem] md:text-xs font-semibold text-amber-600 mb-1 leading-tight flex items-center"><span class="w-4 flex justify-center mr-1 text-sm">+</span> กำลังดำเนินการ<br>จ่าย</span>
+                        <span id="sumProcessing" class="text-lg md:text-xl font-bold text-amber-700 mt-2 break-all">0.00</span>
+                    </div>
+                    <div class="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100 flex flex-col justify-between">
+                        <span class="text-[0.7rem] md:text-xs font-semibold text-emerald-600 mb-1 leading-tight flex items-center">ชำระแล้ว<br>&nbsp;</span>
+                        <span id="sumPaid" class="text-lg md:text-xl font-bold text-emerald-700 mt-2 break-all">0.00</span>
+                    </div>
+                </div>
+
+                <!-- ยอดคงเหลือสุทธิ (เพิ่มใหม่) -->
+                <div class="bg-gradient-to-r from-slate-800 to-slate-900 p-6 md:p-8 rounded-2xl shadow-lg border border-slate-700 flex flex-col md:flex-row items-center justify-between transition-all relative overflow-hidden">
+                    <div class="absolute inset-0 bg-white/5 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px] opacity-20"></div>
+                    
+                    <div class="flex items-center mb-4 md:mb-0 relative z-10 w-full md:w-auto">
+                        <div class="bg-blue-500/20 p-4 rounded-2xl mr-4 text-blue-400 border border-blue-500/30">
+                            <svg class="w-8 h-8 md:w-10 md:h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        </div>
+                        <div>
+                            <h4 class="text-lg md:text-xl font-bold text-white tracking-wide">ยอดคงเหลือสุทธิ</h4>
+                            <p class="text-xs md:text-sm text-slate-400 mt-1 font-medium">รวมรายการตั้งหนี้และกำลังดำเนินการ</p>
+                        </div>
+                    </div>
+                    <div class="text-right relative z-10 w-full md:w-auto flex flex-col items-end">
+                        <div class="flex items-baseline">
+                            <span id="sumNetBalance" class="text-4xl md:text-5xl font-bold tracking-tight text-white drop-shadow-md">0.00</span>
+                            <span class="text-slate-400 ml-3 font-medium text-lg">บาท</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- ส่วนตารางและ Combo Box -->
+            <div class="bg-white p-6 md:p-8 rounded-[2rem] shadow-xl shadow-slate-200/30 ring-1 ring-slate-100">
+                
+                <!-- เครื่องมือส่วนหัวตาราง (Combo Box และปุ่ม Export) -->
+                <div class="mb-6 flex flex-col lg:flex-row lg:items-center justify-between space-y-4 lg:space-y-0 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                    
+                    <!-- Combo Box กรองสถานะ -->
+                    <div class="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-4">
+                        <label for="statusFilter" class="font-semibold text-slate-700 whitespace-nowrap flex items-center">
+                            <svg class="w-5 h-5 mr-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path></svg>
+                            ตัวกรองสถานะ:
+                        </label>
+                        <div class="relative w-full md:w-auto flex-1 md:max-w-xs">
+                            <select id="statusFilter" class="w-full appearance-none pl-4 pr-10 py-2.5 rounded-xl border border-slate-200 focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none bg-white text-slate-700 font-medium transition cursor-pointer shadow-sm">
+                                <option value="all">แสดงทั้งหมด</option>
+                                <option value="empty">มีหนี้ในระบบการเงิน แต่ไม่สามารถวางบิลได้</option>
+                                <option value="has_doc">มีเอกสาร สามารถวางบิลได้</option>
+                                <option value="processing">กำลังดำเนินการจ่าย</option>
+                                <option value="paid">ชำระแล้ว</option>
+                            </select>
+                            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ปุ่ม Export Excel & Word -->
+                    <div class="flex flex-row space-x-2 md:space-x-3 w-full lg:w-auto">
+                        <button onclick="exportToExcel()" class="flex-1 lg:flex-none flex items-center justify-center bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-600 hover:text-white px-4 py-2.5 rounded-xl font-medium transition-colors shadow-sm text-sm whitespace-nowrap">
+                            <svg class="w-5 h-5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            Excel
+                        </button>
+                        <button onclick="exportToWord()" class="flex-1 lg:flex-none flex items-center justify-center bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-600 hover:text-white px-4 py-2.5 rounded-xl font-medium transition-colors shadow-sm text-sm whitespace-nowrap">
+                            <svg class="w-5 h-5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            Word
+                        </button>
+                    </div>
+
+                </div>
+                
+                <!-- ตารางข้อมูลหลัก -->
+                <div class="overflow-x-auto custom-scrollbar border border-slate-200 rounded-xl">
+                    <table class="w-full text-left border-collapse min-w-[650px]" id="dataTable">
+                        <thead>
+                            <tr class="bg-slate-100 text-slate-700 text-sm font-semibold">
+                                <th id="colDateHeader" class="border border-slate-200 py-3 px-4 whitespace-nowrap w-auto">วันที่ตรวจรับ / ดำเนินการ / ชำระเงิน</th>
+                                <th class="border border-slate-200 py-3 px-4 whitespace-nowrap w-auto">เลขที่ใบส่งของ</th>
+                                <th class="border border-slate-200 py-3 px-4 whitespace-nowrap text-right w-auto">จำนวนเงิน</th>
+                                <th class="border border-slate-200 py-3 px-4 whitespace-nowrap w-auto">สถานะ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mainTableBody" class="divide-y divide-slate-100 bg-white">
+                            <!-- ข้อมูลจะถูกแทรกที่นี่ผ่าน JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ข้อความแจ้งเตือนไม่พบข้อมูล -->
+        <div id="errorContainer" class="hidden animate-[fadeIn_0.3s_ease-out] bg-rose-50 border border-rose-200 text-rose-700 p-5 rounded-2xl flex items-center shadow-sm max-w-4xl mx-auto">
+            <div class="bg-rose-100 p-2 rounded-full mr-4 flex-shrink-0">
+                <svg class="w-6 h-6 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            </div>
+            <span id="errorMessage" class="font-medium">ไม่พบข้อมูลชื่อบริษัทนี้ โปรดตรวจสอบอีกครั้ง</span>
+        </div>
+
+    </div>
+
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+
+    <script>
+        // แปลง URL จาก pubhtml เป็นพารามิเตอร์ส่งออกเป็น CSV และระบุชื่อชีต
+        const sheetId = "2PACX-1vT-vY0-Ic04efRHyFptGVLR3UCipBUBhJiFSCWl_3RDAbQP6cUdQaz53D_1Sru3rg";
+        const sheetName = encodeURIComponent("data on outstanding creditors");
+        const CSV_URL = `https://docs.google.com/spreadsheets/d/e/${sheetId}/pub?sheet=${sheetName}&single=true&output=csv`;
+
+        let sheetData = [];
+        let currentFoundRows = []; // ตัวแปรเก็บข้อมูลที่ค้นหาเจอ เพื่อใช้ตอนกรองข้อมูล
+
+        // ลำดับคอลัมน์ (Index เริ่มจาก 0)
+        const COL_DATE = 1;      // คอลัมน์ B (วันที่ตรวจรับ)
+        const COL_COMPANY = 2;   // คอลัมน์ C (ชื่อบริษัท)
+        const COL_DOC_NO = 3;    // คอลัมน์ D (เลขที่ใบส่งของ)
+        const COL_AMOUNT = 4;    // คอลัมน์ E (จำนวนเงิน)
+        const COL_DATE_PAID_DONE = 8; // คอลัมน์ I (วันที่ชำระเงิน - กรณีชำระแล้ว)
+        const COL_TAX_ID = 21;   // คอลัมน์ V (เลขประจำตัวผู้เสียภาษี)
+        const COL_STATUS = 22;   // คอลัมน์ W (สถานะ)
+        const COL_DATE_PAID_PROCESSING = 23; // คอลัมน์ X (วันที่ชำระเงิน - กรณีกำลังดำเนินการ)
+        const COL_PASSWORD = 24; // คอลัมน์ Y (รหัสผ่าน)
+
+        const loadingStatus = document.getElementById('loadingStatus');
+        const companyNameInput = document.getElementById('companyName');
+        const searchBtn = document.getElementById('searchBtn');
+        const searchForm = document.getElementById('searchForm');
+        
+        const resultContainer = document.getElementById('resultContainer');
+        const displayCompanyName = document.getElementById('displayCompanyName');
+        const displayTaxId = document.getElementById('displayTaxId');
+        
+        const statusFilter = document.getElementById('statusFilter');
+        const mainTableBody = document.getElementById('mainTableBody');
+
+        const errorContainer = document.getElementById('errorContainer');
+        const errorMessage = document.getElementById('errorMessage');
+
+        // ส่วนของ UI สรุปยอด
+        const sumEmptyEl = document.getElementById('sumEmpty');
+        const sumHasDocEl = document.getElementById('sumHasDoc');
+        const sumProcessingEl = document.getElementById('sumProcessing');
+        const sumPaidEl = document.getElementById('sumPaid');
+        const sumNetBalanceEl = document.getElementById('sumNetBalance');
+
+        // ฟังก์ชันโหลดข้อมูลตอนเปิดเว็บ
+        function loadData() {
+            Papa.parse(CSV_URL, {
+                download: true,
+                header: false,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    if (results.data && results.data.length > 0) {
+                        sheetData = results.data;
+                        
+                        // ปิดโหลดเดอร์และเปิดให้ใช้งานช่องกรอก
+                        loadingStatus.style.display = 'none';
+                        companyNameInput.disabled = false;
+                        searchBtn.disabled = false;
+                    } else {
+                        showError("ไม่สามารถดึงข้อมูลได้ หรือชีตว่างเปล่า");
+                        loadingStatus.style.display = 'none';
+                    }
+                },
+                error: function(error) {
+                    console.error("Error parsing CSV:", error);
+                    showError("เกิดข้อผิดพลาดในการเชื่อมต่อกับ Google Sheets โปรดตรวจสอบสิทธิ์การแชร์ให้เป็น 'เผยแพร่ทางเว็บ'");
+                    loadingStatus.style.display = 'none';
+                }
+            });
+        }
+
+        // ฟังก์ชันจัดการการค้นหา
+        searchForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // ซ่อนผลลัพธ์เก่าก่อนค้นหาใหม่
+            resultContainer.classList.add('hidden');
+            errorContainer.classList.add('hidden');
+
+            // ลบช่องว่างทั้งหมดออกจากคำค้นหา เพื่อให้ค้นหาเจอแม้จะพิมพ์ติดกันหรือเว้นวรรค
+            const searchCompany = companyNameInput.value.trim().toLowerCase().replace(/\s+/g, '');
+
+            if(!searchCompany) return;
+
+            let foundRows = [];
+            for (let i = 1; i < sheetData.length; i++) {
+                const row = sheetData[i];
+                
+                // ดึงชื่อบริษัทจากข้อมูล และลบช่องว่างออกทั้งหมดสำหรับการเปรียบเทียบ
+                const rowCompanyOriginal = row[COL_COMPANY] ? row[COL_COMPANY].toString().trim() : "";
+                const rowCompanyForMatch = rowCompanyOriginal.toLowerCase().replace(/\s+/g, '');
+
+                // ตรวจสอบชื่อบริษัท (ค้นหาแบบมีคำที่ตรงกันบางส่วน โดยไม่สนใจช่องว่างและตัวพิมพ์เล็ก/ใหญ่)
+                if (rowCompanyForMatch.includes(searchCompany)) {
+                    foundRows.push(row);
+                }
+            }
+
+            if (foundRows.length > 0) {
+                currentFoundRows = foundRows;
+                // รีเซ็ตค่า Combo Box กลับเป็น 'all' เมื่อค้นหาใหม่
+                statusFilter.value = 'all'; 
+                
+                // คำนวณยอดรวม
+                calculateAndDisplaySummary(currentFoundRows);
+
+                renderTable(currentFoundRows, 'all');
+            } else {
+                showError("ไม่พบข้อมูลชื่อบริษัทนี้ โปรดตรวจสอบอีกครั้ง");
+            }
+        });
+
+        // จัดการเมื่อเปลี่ยนตัวเลือกใน Combo Box
+        statusFilter.addEventListener('change', function(e) {
+            const selectedStatus = e.target.value;
+            renderTable(currentFoundRows, selectedStatus);
+        });
+
+        // ฟังก์ชันคำนวณและแสดงผลยอดรวมแยกตามสถานะ และยอดคงเหลือสุทธิ
+        function calculateAndDisplaySummary(rows) {
+            let sumEmpty = 0;
+            let sumHasDoc = 0;
+            let sumProcessing = 0;
+            let sumPaid = 0;
+
+            rows.forEach(row => {
+                const rawStatus = row[COL_STATUS] ? row[COL_STATUS].toString().trim() : "";
+                const amountStr = row[COL_AMOUNT] ? row[COL_AMOUNT].toString() : "0";
+                
+                // แปลงสตริงจำนวนเงินเป็นตัวเลข (ลบลูกน้ำออกก่อน)
+                const amount = parseFloat(amountStr.replace(/,/g, '').trim()) || 0;
+
+                if (rawStatus === "") {
+                    sumEmpty += amount;
+                } else if (rawStatus === "มีเอกสาร") {
+                    sumHasDoc += amount;
+                } else if (rawStatus === "กำลังดำเนินการจ่าย") {
+                    sumProcessing += amount;
+                } else if (rawStatus === "ชำระแล้ว") {
+                    sumPaid += amount;
+                }
+            });
+
+            // คำนวณยอดคงเหลือ = (มีหนี้ + มีเอกสาร + กำลังดำเนินการ)
+            const netBalance = sumEmpty + sumHasDoc + sumProcessing;
+
+            // ฟังก์ชันสำหรับจัดรูปแบบตัวเลขให้มีลูกน้ำและทศนิยม 2 ตำแหน่ง
+            const formatCurrency = (val) => val.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+            sumEmptyEl.textContent = formatCurrency(sumEmpty);
+            sumHasDocEl.textContent = formatCurrency(sumHasDoc);
+            sumProcessingEl.textContent = formatCurrency(sumProcessing);
+            sumPaidEl.textContent = formatCurrency(sumPaid);
+            
+            // เปลี่ยนสียอดคงเหลือถ้าติดลบ
+            if (netBalance < 0) {
+                sumNetBalanceEl.textContent = formatCurrency(netBalance);
+                sumNetBalanceEl.classList.add("text-rose-400");
+                sumNetBalanceEl.classList.remove("text-white");
+            } else {
+                sumNetBalanceEl.textContent = formatCurrency(netBalance);
+                sumNetBalanceEl.classList.add("text-white");
+                sumNetBalanceEl.classList.remove("text-rose-400");
+            }
+        }
+
+        // ฟังก์ชันแปลงวันที่เป็น Time Value สำหรับการเรียงลำดับ (เก่าไปใหม่)
+        function parseDateValueForSort(dateStr) {
+            if (!dateStr || dateStr.trim() === '-' || dateStr.trim() === '') return Number.MAX_SAFE_INTEGER; // ค่าว่างให้อยู่ท้ายสุด
+            
+            // ลบชื่อ วันจันทร์ - วันอาทิตย์ ออกจากข้อความ
+            let cleanedStr = dateStr.replace(/วัน?(จันทร์|อังคาร|พุธ|พฤหัสบดี|ศุกร์|เสาร์|อาทิตย์)\s*ที่?\s*,?\s*/g, '').trim();
+            
+            // รูปแบบที่ 1: ตรวจสอบวันที่แบบมีเครื่องหมาย / หรือ - (เช่น 15/03/2567)
+            const numMatch = cleanedStr.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+            if (numMatch) {
+                let d = parseInt(numMatch[1], 10);
+                let m = parseInt(numMatch[2], 10) - 1;
+                let y = parseInt(numMatch[3], 10);
+                
+                if (y < 100) y += (y > 40) ? 2500 : 2000;
+                if (y >= 2500) y -= 543;
+                
+                return new Date(y, m, d).getTime();
+            }
+
+            // รูปแบบที่ 2: ตรวจสอบวันที่แบบมีชื่อเดือนภาษาไทย (เช่น 15 พ.ค. 2567 หรือ 10 ตุลาคม 67)
+            const thaiMonthsShort = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+            const thaiMonthsFull = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+            
+            const thaiTextMatch = cleanedStr.match(/(\d{1,2})\s+([ก-๙\.]+)\s+(\d{2,4})/);
+            if (thaiTextMatch) {
+                let d = parseInt(thaiTextMatch[1], 10);
+                let monthStr = thaiTextMatch[2];
+                let y = parseInt(thaiTextMatch[3], 10);
+
+                let m = thaiMonthsShort.findIndex(tm => monthStr.includes(tm));
+                if (m === -1) m = thaiMonthsFull.findIndex(tm => monthStr.includes(tm));
+                if (m === -1) m = 0; // กรณีไม่พบชื่อเดือนให้ fallback เป็นเดือน 1
+
+                if (y < 100) y += (y > 40) ? 2500 : 2000;
+                if (y >= 2500) y -= 543;
+                
+                return new Date(y, m, d).getTime();
+            }
+
+            // รูปแบบที่ 3: ใช้ Date parser พื้นฐานกรณีเป็นรูปแบบสากล
+            let dateOnly = cleanedStr.split(' ')[0];
+            const dObj = new Date(dateOnly);
+            if (!isNaN(dObj.getTime())) return dObj.getTime();
+            
+            return Number.MAX_SAFE_INTEGER;
+        }
+
+        // ฟังก์ชันสร้างตารางตามตัวกรองที่เลือก
+        function renderTable(rows, filterStatus) {
+            // อัปเดตข้อมูลบริษัท
+            const companyName = rows[0][COL_COMPANY] || "ไม่ระบุชื่อบริษัท";
+            const taxId = rows[0][COL_TAX_ID] || "-";
+
+            displayCompanyName.textContent = companyName;
+            displayTaxId.textContent = taxId;
+            
+            // ปรับเปลี่ยนชื่อหัวข้อคอลัมน์วันที่ตามตัวกรอง
+            const colDateHeader = document.getElementById('colDateHeader');
+            if (filterStatus === 'empty' || filterStatus === 'has_doc') {
+                colDateHeader.textContent = 'วันที่ตรวจรับ';
+            } else if (filterStatus === 'processing') {
+                colDateHeader.textContent = 'วันที่ดำเนินการ';
+            } else if (filterStatus === 'paid') {
+                colDateHeader.textContent = 'วันที่ชำระเงิน';
+            } else {
+                colDateHeader.textContent = 'วันที่ตรวจรับ / ดำเนินการ / ชำระเงิน';
+            }
+
+            // เรียงลำดับข้อมูลจาก เก่า ไป ใหม่ (Ascending)
+            let sortedRows = [...rows].sort((a, b) => {
+                const getEffectiveDateStr = (row) => {
+                    const rawStatus = row[COL_STATUS] ? row[COL_STATUS].toString().trim() : "";
+                    if (rawStatus === "" || rawStatus === "มีเอกสาร") return row[COL_DATE] || "";
+                    if (rawStatus === "กำลังดำเนินการจ่าย") return row[COL_DATE_PAID_PROCESSING] || "";
+                    if (rawStatus === "ชำระแล้ว") return row[COL_DATE_PAID_DONE] || "";
+                    return row[COL_DATE] || "";
+                };
+                return parseDateValueForSort(getEffectiveDateStr(a)) - parseDateValueForSort(getEffectiveDateStr(b));
+            });
+
+            let html = '';
+
+            sortedRows.forEach(row => {
+                const docNo = row[COL_DOC_NO] || "-";
+                const amount = row[COL_AMOUNT] || "-";
+                const rawStatus = row[COL_STATUS] ? row[COL_STATUS].toString().trim() : "";
+
+                // กำหนดประเภทสถานะและสีตัวอักษร พร้อมดึงข้อมูลวันที่จากคอลัมน์ที่ถูกต้อง
+                let rowCategory = "";
+                let displayStatusHtml = "";
+                let displayDate = "-";
+
+                // ปรับแต่ง UI ของ Badge ป้ายสถานะ
+                if (rawStatus === "") {
+                    rowCategory = "empty";
+                    displayDate = row[COL_DATE] || "-"; 
+                    displayStatusHtml = '<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-600 border border-rose-200"><span class="w-1.5 h-1.5 bg-rose-500 rounded-full mr-1.5"></span>มีหนี้ในระบบการเงิน แต่ไม่สามารถวางบิลได้</span>';
+                } else if (rawStatus === "มีเอกสาร") {
+                    rowCategory = "has_doc";
+                    displayDate = row[COL_DATE] || "-"; 
+                    displayStatusHtml = '<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-600 border border-blue-200"><span class="w-1.5 h-1.5 bg-blue-500 rounded-full mr-1.5"></span>มีเอกสาร สามารถวางบิลได้</span>';
+                } else if (rawStatus === "กำลังดำเนินการจ่าย") {
+                    rowCategory = "processing";
+                    displayDate = row[COL_DATE_PAID_PROCESSING] || "-"; 
+                    displayStatusHtml = '<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-600 border border-amber-200"><span class="w-1.5 h-1.5 bg-amber-500 rounded-full mr-1.5"></span>กำลังดำเนินการจ่าย</span>';
+                } else if (rawStatus === "ชำระแล้ว") {
+                    rowCategory = "paid";
+                    displayDate = row[COL_DATE_PAID_DONE] || "-"; 
+                    displayStatusHtml = '<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-600 border border-emerald-200"><span class="w-1.5 h-1.5 bg-emerald-500 rounded-full mr-1.5"></span>ชำระแล้ว</span>';
+                } else {
+                    rowCategory = "other";
+                    displayDate = row[COL_DATE] || "-"; 
+                    displayStatusHtml = `<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">${rawStatus}</span>`;
+                }
+
+                // ถ้าเลือก 'all' หรือ ตรงกับ filter ที่เลือก ให้สร้างแถวข้อมูลนั้น
+                if (filterStatus === 'all' || filterStatus === rowCategory) {
+                    html += `
+                        <tr class="hover:bg-slate-50 transition-colors text-sm">
+                            <td class="border border-slate-200 py-2.5 px-4 text-slate-700 align-top">${displayDate}</td>
+                            <td class="border border-slate-200 py-2.5 px-4 text-slate-700 whitespace-nowrap align-top font-medium">${docNo}</td>
+                            <td class="border border-slate-200 py-2.5 px-4 text-slate-900 font-semibold text-right align-top">${amount}</td>
+                            <td class="border border-slate-200 py-2.5 px-4 align-top whitespace-nowrap">${displayStatusHtml}</td>
+                        </tr>
+                    `;
+                }
+            });
+
+            // ถ้าไม่มีข้อมูลตรงกับตัวกรองเลย
+            if (html === '') {
+                html = `<tr><td colspan="4" class="border border-slate-200 py-8 px-4 text-center text-sm text-slate-500 bg-slate-50/50">
+                    <svg class="w-12 h-12 mx-auto text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    ไม่มีรายการข้อมูลสำหรับสถานะที่เลือก
+                </td></tr>`;
+            }
+
+            mainTableBody.innerHTML = html;
+            resultContainer.classList.remove('hidden');
+        }
+
+        // ฟังก์ชันสำหรับการส่งออกเป็นไฟล์ Excel (.xlsx)
+        function exportToExcel() {
+            let exportData = [];
+            
+            // ใส่ส่วนหัวเรื่องและข้อมูลบริษัท
+            exportData.push(["ข้อมูลผู้เสียภาษี"]);
+            exportData.push(["ชื่อบริษัท:", document.getElementById('displayCompanyName').innerText]);
+            exportData.push(["เลขประจำตัวผู้เสียภาษี:", document.getElementById('displayTaxId').innerText]);
+            exportData.push([]); // แถวว่าง
+            
+            // ดึงข้อมูลหัวตาราง
+            let headers = [
+                document.getElementById('colDateHeader').innerText,
+                "เลขที่ใบส่งของ",
+                "จำนวนเงิน",
+                "สถานะ"
+            ];
+            exportData.push(headers);
+            
+            // ดึงข้อมูลแต่ละแถวจากตารางที่แสดงผลอยู่ ณ ปัจจุบัน
+            const rows = document.querySelectorAll("#mainTableBody tr");
+            rows.forEach(row => {
+                let cols = row.querySelectorAll("td");
+                if(cols.length === 4) {
+                    exportData.push([
+                        cols[0].innerText.trim(),
+                        cols[1].innerText.trim(),
+                        cols[2].innerText.trim(),
+                        cols[3].innerText.trim()
+                    ]);
+                } else if(cols.length === 1) { // กรณีตารางแจ้งเตือนไม่มีข้อมูล
+                    exportData.push([cols[0].innerText.trim()]);
+                }
+            });
+            
+            // สร้างไฟล์ Worksheet และ Workbook เพื่อส่งออก
+            let ws = XLSX.utils.aoa_to_sheet(exportData);
+            let wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Data");
+            XLSX.writeFile(wb, "Data_Outstanding_Creditors.xlsx");
+        }
+
+        // ฟังก์ชันสำหรับการส่งออกเป็นไฟล์ Word (.doc)
+        function exportToWord() {
+            let header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Export HTML to Word</title></head><body>";
+            let footer = "</body></html>";
+            
+            let html = `<h2 style="font-family: 'Sarabun', Tahoma, sans-serif;">ข้อมูลผู้เสียภาษี</h2>`;
+            html += `<p style="font-family: 'Sarabun', Tahoma, sans-serif; font-size: 16px;"><b>ชื่อบริษัท:</b> ${document.getElementById('displayCompanyName').innerText}<br>`;
+            html += `<b>เลขประจำตัวผู้เสียภาษี:</b> ${document.getElementById('displayTaxId').innerText}</p>`;
+            
+            html += `<table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse; font-family: 'Sarabun', Tahoma, sans-serif; width: 100%; font-size: 14px;">`;
+            
+            // ดึงข้อมูลหัวตาราง
+            html += `<tr><th style="background-color: #f1f5f9; text-align: left;">${document.getElementById('colDateHeader').innerText}</th><th style="background-color: #f1f5f9; text-align: left;">เลขที่ใบส่งของ</th><th style="background-color: #f1f5f9; text-align: right;">จำนวนเงิน</th><th style="background-color: #f1f5f9; text-align: left;">สถานะ</th></tr>`;
+            
+            // ดึงข้อมูลแต่ละแถวจากตาราง
+            const rows = document.querySelectorAll("#mainTableBody tr");
+            rows.forEach(row => {
+                let cols = row.querySelectorAll("td");
+                if(cols.length === 4) {
+                    html += `<tr>
+                        <td>${cols[0].innerText.trim()}</td>
+                        <td>${cols[1].innerText.trim()}</td>
+                        <td align="right">${cols[2].innerText.trim()}</td>
+                        <td>${cols[3].innerText.trim()}</td>
+                    </tr>`;
+                } else if(cols.length === 1) {
+                    html += `<tr><td colspan="4" align="center">${cols[0].innerText.trim()}</td></tr>`;
+                }
+            });
+            
+            html += `</table>`;
+            
+            // รวมโค้ด HTML เพื่อสั่งดาวน์โหลด
+            let sourceHTML = header + html + footer;
+            let source = 'data:application/vnd.ms-word;charset=utf-8,' + encodeURIComponent(sourceHTML);
+            let fileDownload = document.createElement("a");
+            document.body.appendChild(fileDownload);
+            fileDownload.href = source;
+            fileDownload.download = 'Data_Outstanding_Creditors.doc';
+            fileDownload.click();
+            document.body.removeChild(fileDownload);
+        }
+
+        // ฟังก์ชันแสดงข้อผิดพลาด
+        function showError(msg) {
+            errorMessage.textContent = msg;
+            errorContainer.classList.remove('hidden');
+        }
+
+        // เริ่มโหลดข้อมูลทันที
+        loadData();
+
+    </script>
+</body>
+</html>
