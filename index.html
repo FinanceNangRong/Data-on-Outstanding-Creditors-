@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ค้นหาข้อมูลเจ้าหนี้คงค้าง (Data on Outstanding Creditors)</title>
+    <title>ค้นหาข้อมูลเจ้าหนี้คงค้าง สำหรับเจ้าหน้าที่การเงิน (Data on Outstanding Creditors)</title>
     <!-- ใช้ Tailwind CSS สำหรับตกแต่ง UI -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- ใช้ PapaParse สำหรับอ่านไฟล์ CSV จาก Google Sheets -->
@@ -40,7 +40,7 @@
                  alt="NRHOS Logo" 
                  class="h-20 md:h-24 mx-auto mb-8 object-contain drop-shadow-md hover:scale-105 transition-transform duration-300"
                  onerror="this.onerror=null; this.src='https://github.com/FinanceNangRong/Data-on-Outstanding-Creditors/raw/master/NRHOS.png';">
-            <h1 class="text-3xl md:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-700 to-indigo-600 py-1 leading-relaxed">ระบบค้นหาข้อมูลเจ้าหนี้คงค้าง</h1>
+            <h1 class="text-3xl md:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-700 to-indigo-600 py-1 leading-relaxed">ระบบค้นหาข้อมูลเจ้าหนี้คงค้าง สำหรับเจ้าหน้าที่การเงิน</h1>
             <p class="text-slate-500 font-medium tracking-wide uppercase text-sm">Data on Outstanding Creditors</p>
         </div>
 
@@ -188,6 +188,7 @@
                     <table class="w-full text-left border-collapse min-w-[650px]" id="dataTable">
                         <thead>
                             <tr class="bg-slate-100 text-slate-700 text-sm font-semibold">
+                                <th class="border border-slate-200 py-3 px-4 whitespace-nowrap w-auto">หมวดประเภทรายการ</th>
                                 <th id="colDateHeader" class="border border-slate-200 py-3 px-4 whitespace-nowrap w-auto">วันที่ตรวจรับ / ดำเนินการ / ชำระเงิน</th>
                                 <th class="border border-slate-200 py-3 px-4 whitespace-nowrap w-auto">เลขที่ใบส่งของ</th>
                                 <th class="border border-slate-200 py-3 px-4 whitespace-nowrap w-auto">ประเภทการจ่าย</th>
@@ -454,8 +455,16 @@
                 colDateHeader.textContent = 'วันที่ตรวจรับ / ดำเนินการ / ชำระเงิน';
             }
 
-            // เรียงลำดับข้อมูลจาก เก่า ไป ใหม่ (Ascending)
+            // เรียงลำดับข้อมูล จับกลุ่มตามหมวดประเภทรายการก่อน แล้วเรียงจาก เก่า ไป ใหม่
             let sortedRows = [...rows].sort((a, b) => {
+                const catA = (a[COL_PAYMENT_METHOD] || "").toString().trim();
+                const catB = (b[COL_PAYMENT_METHOD] || "").toString().trim();
+                
+                // จับกลุ่มหมวดประเภทรายการให้อยู่ด้วยกัน
+                if (catA !== catB) {
+                    return catA.localeCompare(catB, 'th');
+                }
+
                 const getEffectiveDateStr = (row) => {
                     const rawStatus = row[COL_STATUS] ? row[COL_STATUS].toString().trim() : "";
                     if (rawStatus === "" || rawStatus === "มีเอกสาร") return row[COL_DATE] || "";
@@ -466,7 +475,7 @@
                 return parseDateValueForSort(getEffectiveDateStr(a)) - parseDateValueForSort(getEffectiveDateStr(b));
             });
 
-            let html = '';
+            let renderData = [];
 
             sortedRows.forEach(row => {
                 const docNo = row[COL_DOC_NO] || "-";
@@ -476,10 +485,12 @@
                 // เช็คประเภทการจ่าย จากคอลัมน์ M
                 const rawPaymentMethod = row[COL_PAYMENT_METHOD] ? row[COL_PAYMENT_METHOD].toString().trim() : "";
                 let paymentTypeDisplay = "เช็ค";
+                let paymentTypeClass = "text-orange-500 font-bold"; // สีส้มสำหรับ เช็ค
                 if (rawPaymentMethod.includes("GFMIS (เงินงบประมาณ)") ||
                     rawPaymentMethod.includes("GFMIS (เงินฝากคลัง)") ||
                     rawPaymentMethod.includes("E-Bidding (เงินฝากคลัง)")) {
                     paymentTypeDisplay = "จ่ายตรงผู้ขาย";
+                    paymentTypeClass = "text-blue-600 font-bold"; // สีน้ำเงินสำหรับ จ่ายตรงผู้ขาย
                 }
 
                 // กำหนดประเภทสถานะและสีตัวอักษร พร้อมดึงข้อมูลวันที่จากคอลัมน์ที่ถูกต้อง
@@ -510,23 +521,69 @@
                     displayStatusHtml = `<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">${rawStatus}</span>`;
                 }
 
-                // ถ้าเลือก 'all' หรือ ตรงกับ filter ที่เลือก ให้สร้างแถวข้อมูลนั้น
+                // เก็บข้อมูลเข้า renderData เฉพาะที่ตรงกับ Filter
                 if (filterStatus === 'all' || filterStatus === rowCategory) {
-                    html += `
-                        <tr class="hover:bg-slate-50 transition-colors text-sm">
-                            <td class="border border-slate-200 py-2.5 px-4 text-slate-700 align-top">${displayDate}</td>
-                            <td class="border border-slate-200 py-2.5 px-4 text-slate-700 whitespace-nowrap align-top font-medium">${docNo}</td>
-                            <td class="border border-slate-200 py-2.5 px-4 text-slate-700 whitespace-nowrap align-top">${paymentTypeDisplay}</td>
-                            <td class="border border-slate-200 py-2.5 px-4 text-slate-900 font-semibold text-right align-top">${amount}</td>
-                            <td class="border border-slate-200 py-2.5 px-4 align-top whitespace-nowrap">${displayStatusHtml}</td>
-                        </tr>
-                    `;
+                    renderData.push({
+                        rawPaymentMethod,
+                        displayDate,
+                        docNo,
+                        paymentTypeDisplay,
+                        paymentTypeClass,
+                        amount,
+                        displayStatusHtml
+                    });
                 }
             });
 
+            let html = '';
+            let i = 0;
+            
+            // วนลูปสร้าง HTML แบบจัดกลุ่ม (Rowspan)
+            while (i < renderData.length) {
+                let currentItem = renderData[i];
+                let groupCount = 1;
+
+                // นับจำนวนแถวที่อยู่ในหมวดประเภทรายการเดียวกัน
+                for (let j = i + 1; j < renderData.length; j++) {
+                    if (renderData[j].rawPaymentMethod === currentItem.rawPaymentMethod) {
+                        groupCount++;
+                    } else {
+                        break;
+                    }
+                }
+
+                // สร้างแถวแรกของกลุ่ม (มี rowspan เพื่อจัดกลุ่มคอลัมน์แรก)
+                html += `
+                    <tr class="hover:bg-slate-50 transition-colors text-sm">
+                        <td rowspan="${groupCount}" class="border border-slate-200 py-2.5 px-4 text-slate-800 whitespace-nowrap align-top font-bold bg-slate-50/50">${currentItem.rawPaymentMethod}</td>
+                        <td class="border border-slate-200 py-2.5 px-4 text-slate-700 align-top">${currentItem.displayDate}</td>
+                        <td class="border border-slate-200 py-2.5 px-4 text-slate-700 whitespace-nowrap align-top font-medium">${currentItem.docNo}</td>
+                        <td class="border border-slate-200 py-2.5 px-4 whitespace-nowrap align-top ${currentItem.paymentTypeClass}">${currentItem.paymentTypeDisplay}</td>
+                        <td class="border border-slate-200 py-2.5 px-4 text-slate-900 font-semibold text-right align-top">${currentItem.amount}</td>
+                        <td class="border border-slate-200 py-2.5 px-4 align-top whitespace-nowrap">${currentItem.displayStatusHtml}</td>
+                    </tr>
+                `;
+
+                // สร้างแถวถัดไปในกลุ่ม (ไม่ต้องมีคอลัมน์แรก เพราะถูกยุบรวมกับแถวแรกแล้ว)
+                for (let j = 1; j < groupCount; j++) {
+                    let subItem = renderData[i + j];
+                    html += `
+                        <tr class="hover:bg-slate-50 transition-colors text-sm">
+                            <td class="border border-slate-200 py-2.5 px-4 text-slate-700 align-top">${subItem.displayDate}</td>
+                            <td class="border border-slate-200 py-2.5 px-4 text-slate-700 whitespace-nowrap align-top font-medium">${subItem.docNo}</td>
+                            <td class="border border-slate-200 py-2.5 px-4 whitespace-nowrap align-top ${subItem.paymentTypeClass}">${subItem.paymentTypeDisplay}</td>
+                            <td class="border border-slate-200 py-2.5 px-4 text-slate-900 font-semibold text-right align-top">${subItem.amount}</td>
+                            <td class="border border-slate-200 py-2.5 px-4 align-top whitespace-nowrap">${subItem.displayStatusHtml}</td>
+                        </tr>
+                    `;
+                }
+
+                i += groupCount; // ข้ามไปกลุ่มถัดไป
+            }
+
             // ถ้าไม่มีข้อมูลตรงกับตัวกรองเลย
             if (html === '') {
-                html = `<tr><td colspan="5" class="border border-slate-200 py-8 px-4 text-center text-sm text-slate-500 bg-slate-50/50">
+                html = `<tr><td colspan="6" class="border border-slate-200 py-8 px-4 text-center text-sm text-slate-500 bg-slate-50/50">
                     <svg class="w-12 h-12 mx-auto text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                     ไม่มีรายการข้อมูลสำหรับสถานะที่เลือก
                 </td></tr>`;
@@ -548,6 +605,7 @@
             
             // ดึงข้อมูลหัวตาราง
             let headers = [
+                "หมวดประเภทรายการ",
                 document.getElementById('colDateHeader').innerText,
                 "เลขที่ใบส่งของ",
                 "ประเภทการจ่าย",
@@ -556,12 +614,25 @@
             ];
             exportData.push(headers);
             
-            // ดึงข้อมูลแต่ละแถวจากตารางที่แสดงผลอยู่ ณ ปัจจุบัน
+            // ดึงข้อมูลแต่ละแถวจากตารางที่แสดงผลอยู่ ณ ปัจจุบัน (ปรับปรุงให้รองรับ Rowspan)
+            let currentCategory = "";
             const rows = document.querySelectorAll("#mainTableBody tr");
             rows.forEach(row => {
                 let cols = row.querySelectorAll("td");
-                if(cols.length === 5) {
+                if(cols.length === 6) {
+                    currentCategory = cols[0].innerText.trim(); // จำค่าหมวดหมู่ไว้ใช้กับแถวถัดไปในกลุ่ม
                     exportData.push([
+                        currentCategory,
+                        cols[1].innerText.trim(),
+                        cols[2].innerText.trim(),
+                        cols[3].innerText.trim(),
+                        cols[4].innerText.trim(),
+                        cols[5].innerText.trim()
+                    ]);
+                } else if(cols.length === 5) {
+                    // เติมหมวดหมู่ให้เต็มบรรทัด เพื่อให้ข้อมูลใน Excel นำไปเรียง/กรองต่อได้สมบูรณ์
+                    exportData.push([
+                        currentCategory,
                         cols[0].innerText.trim(),
                         cols[1].innerText.trim(),
                         cols[2].innerText.trim(),
@@ -592,22 +663,33 @@
             html += `<table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse; font-family: 'Sarabun', Tahoma, sans-serif; width: 100%; font-size: 14px;">`;
             
             // ดึงข้อมูลหัวตาราง
-            html += `<tr><th style="background-color: #f1f5f9; text-align: left;">${document.getElementById('colDateHeader').innerText}</th><th style="background-color: #f1f5f9; text-align: left;">เลขที่ใบส่งของ</th><th style="background-color: #f1f5f9; text-align: left;">ประเภทการจ่าย</th><th style="background-color: #f1f5f9; text-align: right;">จำนวนเงิน</th><th style="background-color: #f1f5f9; text-align: left;">สถานะ</th></tr>`;
+            html += `<tr><th style="background-color: #f1f5f9; text-align: left;">หมวดประเภทรายการ</th><th style="background-color: #f1f5f9; text-align: left;">${document.getElementById('colDateHeader').innerText}</th><th style="background-color: #f1f5f9; text-align: left;">เลขที่ใบส่งของ</th><th style="background-color: #f1f5f9; text-align: left;">ประเภทการจ่าย</th><th style="background-color: #f1f5f9; text-align: right;">จำนวนเงิน</th><th style="background-color: #f1f5f9; text-align: left;">สถานะ</th></tr>`;
             
-            // ดึงข้อมูลแต่ละแถวจากตาราง
+            // ดึงข้อมูลแต่ละแถวจากตาราง (ปรับปรุงให้รองรับ Rowspan ไปยัง Word ด้วย)
             const rows = document.querySelectorAll("#mainTableBody tr");
             rows.forEach(row => {
                 let cols = row.querySelectorAll("td");
-                if(cols.length === 5) {
+                if(cols.length === 6) {
+                    let rowspanAttr = cols[0].getAttribute('rowspan');
+                    let rowspanHtml = rowspanAttr ? ` rowspan="${rowspanAttr}"` : '';
                     html += `<tr>
-                        <td>${cols[0].innerText.trim()}</td>
-                        <td>${cols[1].innerText.trim()}</td>
-                        <td>${cols[2].innerText.trim()}</td>
-                        <td align="right">${cols[3].innerText.trim()}</td>
-                        <td>${cols[4].innerText.trim()}</td>
+                        <td${rowspanHtml} valign="top">${cols[0].innerText.trim()}</td>
+                        <td valign="top">${cols[1].innerText.trim()}</td>
+                        <td valign="top">${cols[2].innerText.trim()}</td>
+                        <td valign="top">${cols[3].innerText.trim()}</td>
+                        <td align="right" valign="top">${cols[4].innerText.trim()}</td>
+                        <td valign="top">${cols[5].innerText.trim()}</td>
+                    </tr>`;
+                } else if(cols.length === 5) {
+                    html += `<tr>
+                        <td valign="top">${cols[0].innerText.trim()}</td>
+                        <td valign="top">${cols[1].innerText.trim()}</td>
+                        <td valign="top">${cols[2].innerText.trim()}</td>
+                        <td align="right" valign="top">${cols[3].innerText.trim()}</td>
+                        <td valign="top">${cols[4].innerText.trim()}</td>
                     </tr>`;
                 } else if(cols.length === 1) {
-                    html += `<tr><td colspan="5" align="center">${cols[0].innerText.trim()}</td></tr>`;
+                    html += `<tr><td colspan="6" align="center">${cols[0].innerText.trim()}</td></tr>`;
                 }
             });
             
