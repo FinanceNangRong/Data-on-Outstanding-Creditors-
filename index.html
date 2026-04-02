@@ -598,7 +598,6 @@
             let exportData = [];
             
             // ใส่ส่วนหัวเรื่องและข้อมูลบริษัท
-            exportData.push(["ข้อมูลผู้เสียภาษี"]);
             exportData.push(["ชื่อบริษัท:", document.getElementById('displayCompanyName').innerText]);
             exportData.push(["เลขประจำตัวผู้เสียภาษี:", document.getElementById('displayTaxId').innerText]);
             exportData.push([]); // แถวว่าง
@@ -656,8 +655,7 @@
             let header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Export HTML to Word</title></head><body>";
             let footer = "</body></html>";
             
-            let html = `<h2 style="font-family: 'Sarabun', Tahoma, sans-serif;">ข้อมูลผู้เสียภาษี</h2>`;
-            html += `<p style="font-family: 'Sarabun', Tahoma, sans-serif; font-size: 16px;"><b>ชื่อบริษัท:</b> ${document.getElementById('displayCompanyName').innerText}<br>`;
+            let html = `<p style="font-family: 'Sarabun', Tahoma, sans-serif; font-size: 16px;"><b>ชื่อบริษัท:</b> ${document.getElementById('displayCompanyName').innerText}<br>`;
             html += `<b>เลขประจำตัวผู้เสียภาษี:</b> ${document.getElementById('displayTaxId').innerText}</p>`;
             
             html += `<table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse; font-family: 'Sarabun', Tahoma, sans-serif; width: 100%; font-size: 14px;">`;
