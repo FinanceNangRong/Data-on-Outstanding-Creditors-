@@ -28,6 +28,43 @@
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* สไตล์สำหรับการพิมพ์ (Print) */
+        @media print {
+            body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            /* ซ่อนส่วนที่ไม่ต้องการพิมพ์ */
+            .text-center.space-y-3.pt-4, /* โลโก้และหัวเว็บ */
+            #searchForm, /* ฟอร์มค้นหา */
+            .mb-6.flex.flex-col.lg\:flex-row, /* แถบเครื่องมือ Filter & Export */
+            #errorContainer /* กล่องแจ้งเตือน */
+            { display: none !important; }
+            
+            /* ปรับแต่งส่วนที่พิมพ์ให้เต็มหน้ากระดาษ */
+            #resultContainer { display: block !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important; }
+            .bg-white { box-shadow: none !important; border: none !important; padding: 0 !important; }
+            .max-w-5xl { max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
+            
+            /* ปรับตาราง */
+            .overflow-x-auto { overflow: visible !important; border: none !important; }
+            table { width: 100% !important; border-collapse: collapse !important; font-size: 12pt !important; }
+            th, td { border: 1px solid #94a3b8 !important; padding: 8px !important; }
+            th { background-color: #f1f5f9 !important; color: #1e293b !important; }
+            .bg-slate-50\/50 { background-color: #f8fafc !important; }
+            
+            /* ปรับกล่องสรุปยอด */
+            .grid { display: flex !important; flex-wrap: wrap !important; gap: 10px !important; margin-bottom: 20px !important; }
+            .grid > div { flex: 1 1 calc(25% - 10px) !important; border: 1px solid #cbd5e1 !important; padding: 10px !important; break-inside: avoid; }
+            
+            /* ปรับกล่องยอดคงเหลือสุทธิให้อ่านง่ายตอนพิมพ์ขาวดำ */
+            .bg-gradient-to-r.from-slate-800 { background: white !important; border: 2px solid #94a3b8 !important; box-shadow: none !important; color: black !important; }
+            .bg-gradient-to-r.from-slate-800 * { color: black !important; }
+            .bg-gradient-to-r.from-slate-800 svg { color: #3b82f6 !important; }
+            .text-white { color: black !important; }
+            #sumNetBalance.text-rose-400 { color: #e11d48 !important; }
+            
+            /* ซ่อนของตกแต่ง */
+            .absolute, .blur-2xl { display: none !important; }
+        }
     </style>
 </head>
 <body class="bg-gradient-to-br from-slate-50 via-white to-blue-50/50 min-h-screen p-4 md:p-8 text-slate-800">
@@ -171,6 +208,10 @@
 
                     <!-- ปุ่ม Export Excel & Word -->
                     <div class="flex flex-row space-x-2 md:space-x-3 w-full lg:w-auto">
+                        <button onclick="window.print()" class="flex-1 lg:flex-none flex items-center justify-center bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-600 hover:text-white px-4 py-2.5 rounded-xl font-medium transition-colors shadow-sm text-sm whitespace-nowrap">
+                            <svg class="w-5 h-5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                            พิมพ์
+                        </button>
                         <button onclick="exportToExcel()" class="flex-1 lg:flex-none flex items-center justify-center bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-600 hover:text-white px-4 py-2.5 rounded-xl font-medium transition-colors shadow-sm text-sm whitespace-nowrap">
                             <svg class="w-5 h-5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                             Excel
