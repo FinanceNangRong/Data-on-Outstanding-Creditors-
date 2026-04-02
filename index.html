@@ -31,7 +31,16 @@
         
         /* สไตล์สำหรับการพิมพ์ (Print) */
         @media print {
-            body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            @page {
+                size: A4 portrait; /* บังคับขนาดกระดาษเป็น A4 แนวตั้ง */
+                margin: 10mm; /* กำหนดระยะขอบกระดาษ */
+            }
+            body { 
+                background: white !important; 
+                -webkit-print-color-adjust: exact; 
+                print-color-adjust: exact; 
+                font-size: 10pt !important; /* ย่อขนาดตัวหนังสือรวม */
+            }
             /* ซ่อนส่วนที่ไม่ต้องการพิมพ์ */
             .text-center.space-y-3.pt-4, /* โลโก้และหัวเว็บ */
             #searchForm, /* ฟอร์มค้นหา */
@@ -44,15 +53,16 @@
             .bg-white { box-shadow: none !important; border: none !important; padding: 0 !important; }
             .max-w-5xl { max-width: 100% !important; margin: 0 !important; padding: 0 !important; }
             
-            /* ลบกรอบพื้นหลังของชื่อบริษัทออก */
-            .bg-slate-50.rounded-2xl.p-5 { background: transparent !important; border: none !important; padding: 0 !important; margin-bottom: 20px !important; }
-            .text-blue-800 { color: black !important; }
-            .text-slate-600 { color: black !important; }
+            /* ลบกรอบพื้นหลังและย่อขนาดหัวข้อ */
+            .bg-slate-50.rounded-2xl.p-5 { background: transparent !important; border: none !important; padding: 0 !important; margin-bottom: 15px !important; }
+            .text-blue-800 { color: black !important; font-size: 14pt !important; } /* ย่อชื่อบริษัทลง */
+            .text-slate-600 { color: black !important; font-size: 10pt !important; }
+            h2.text-xl { font-size: 12pt !important; margin-bottom: 5px !important; }
             
-            /* ปรับตาราง */
+            /* ปรับตารางให้ย่อเล็กลงพอดี A4 */
             .overflow-x-auto { overflow: visible !important; border: none !important; }
-            table { width: 100% !important; border-collapse: collapse !important; font-size: 12pt !important; }
-            th, td { border: 1px solid #000 !important; padding: 8px !important; color: black !important; }
+            table { width: 100% !important; border-collapse: collapse !important; font-size: 9pt !important; } /* ย่อตัวหนังสือตาราง */
+            th, td { border: 1px solid #000 !important; padding: 4px 6px !important; color: black !important; } /* ลด padding ในตาราง */
             th { background-color: #f1f5f9 !important; font-weight: bold !important; }
             .bg-slate-50\/50 { background-color: transparent !important; }
             
