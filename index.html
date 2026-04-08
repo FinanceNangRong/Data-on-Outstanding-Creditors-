@@ -727,6 +727,10 @@
             
             // สร้างไฟล์ Worksheet และ Workbook เพื่อส่งออก
             let ws = XLSX.utils.aoa_to_sheet(exportData);
+            
+            // ตั้งค่าหน้ากระดาษ Excel ให้เป็นแนวนอน
+            ws['!pageSetup'] = { orientation: 'landscape' };
+            
             let wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, "Data");
             XLSX.writeFile(wb, "Data_Outstanding_Creditors.xlsx");
@@ -734,8 +738,9 @@
 
         // ฟังก์ชันสำหรับการส่งออกเป็นไฟล์ Word (.doc)
         function exportToWord() {
-            let header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Export HTML to Word</title></head><body>";
-            let footer = "</body></html>";
+            // เพิ่ม CSS พิเศษสำหรับบังคับให้ MS Word แสดงผลเป็นแนวนอน (Landscape)
+            let header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Export HTML to Word</title><style>@page Section1 {size:841.9pt 595.3pt; mso-page-orientation:landscape; margin:1.0in 1.0in 1.0in 1.0in;} div.Section1 {page:Section1;}</style></head><body><div class='Section1'>";
+            let footer = "</div></body></html>";
             
             let html = `<p style="font-family: 'Sarabun', Tahoma, sans-serif; font-size: 16px;"><b>ชื่อบริษัท:</b> ${document.getElementById('displayCompanyName').innerText}<br>`;
             html += `<b>เลขประจำตัวผู้เสียภาษี:</b> ${document.getElementById('displayTaxId').innerText}</p>`;
