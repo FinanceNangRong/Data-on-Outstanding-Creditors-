@@ -481,12 +481,18 @@
 
         // ฟังก์ชันสร้างตารางตามตัวกรองที่เลือก
         function renderTable(rows, filterStatus) {
-            // อัปเดตข้อมูลบริษัท
-            const companyName = rows[0][COL_COMPANY] || "ไม่ระบุชื่อบริษัท";
-            const taxId = rows[0][COL_TAX_ID] || "-";
+            // อัปเดตข้อมูลบริษัท โดยดึงชื่อบริษัทและเลขผู้เสียภาษีแบบไม่ซ้ำกันมา
+            const uniqueCompanies = [...new Set(rows.map(r => (r[COL_COMPANY] || "").toString().trim()))].filter(Boolean);
+            const uniqueTaxIds = [...new Set(rows.map(r => (r[COL_TAX_ID] || "").toString().trim()))].filter(Boolean);
 
-            displayCompanyName.textContent = companyName;
-            displayTaxId.textContent = taxId;
+            if (uniqueCompanies.length > 1) {
+                // หากเจอมากกว่า 1 บริษัท/สาขา ให้แสดงป้ายกำกับบอกจำนวน
+                displayCompanyName.innerHTML = `${uniqueCompanies[0]} <span class="text-sm md:text-base font-medium text-blue-700 ml-2 tracking-normal bg-blue-100 px-3 py-1 rounded-full align-middle print:hidden">พบ ${uniqueCompanies.length} สาขา/บริษัท</span>`;
+            } else {
+                displayCompanyName.textContent = uniqueCompanies[0] || "ไม่ระบุชื่อบริษัท";
+            }
+            
+            displayTaxId.textContent = uniqueTaxIds.length > 0 ? uniqueTaxIds.join(", ") : "-";
             
             // ปรับเปลี่ยนชื่อหัวข้อคอลัมน์วันที่ตามตัวกรอง
             const colDateHeader = document.getElementById('colDateHeader');
@@ -500,8 +506,12 @@
                 colDateHeader.textContent = 'วันที่ตรวจรับ / ดำเนินการ / ชำระเงิน';
             }
 
-            // เรียงลำดับข้อมูล จับกลุ่มตามหมวดประเภทรายการก่อน แล้วเรียงจาก เก่า ไป ใหม่
+            // เรียงลำดับข้อมูล จับกลุ่มตาม ชื่อบริษัท ก่อน แล้วค่อย หมวดประเภทรายการ แล้วเรียงจาก เก่า ไป ใหม่
             let sortedRows = [...rows].sort((a, b) => {
+                const compA = (a[COL_COMPANY] || "").toString().trim();
+                const compB = (b[COL_COMPANY] || "").toString().trim();
+                if (compA !== compB) return compA.localeCompare(compB, 'th');
+
                 const catA = (a[COL_PAYMENT_METHOD] || "").toString().trim();
                 const catB = (b[COL_PAYMENT_METHOD] || "").toString().trim();
                 
@@ -523,6 +533,7 @@
             let renderData = [];
 
             sortedRows.forEach(row => {
+                const compName = row[COL_COMPANY] ? row[COL_COMPANY].toString().trim() : "ไม่ระบุชื่อบริษัท";
                 const docNo = row[COL_DOC_NO] || "-";
                 const amount = row[COL_AMOUNT] || "-";
                 const rawStatus = row[COL_STATUS] ? row[COL_STATUS].toString().trim() : "";
@@ -569,6 +580,7 @@
                 // เก็บข้อมูลเข้า renderData เฉพาะที่ตรงกับ Filter
                 if (filterStatus === 'all' || filterStatus === rowCategory) {
                     renderData.push({
+                        companyName: compName,
                         rawPaymentMethod,
                         displayDate,
                         docNo,
@@ -583,47 +595,72 @@
             let html = '';
             let i = 0;
             
-            // วนลูปสร้าง HTML แบบจัดกลุ่ม (Rowspan)
+            // วนลูปสร้าง HTML แบบจัดกลุ่ม (Company -> Rowspan by Method)
             while (i < renderData.length) {
-                let currentItem = renderData[i];
-                let groupCount = 1;
-
-                // นับจำนวนแถวที่อยู่ในหมวดประเภทรายการเดียวกัน
-                for (let j = i + 1; j < renderData.length; j++) {
-                    if (renderData[j].rawPaymentMethod === currentItem.rawPaymentMethod) {
-                        groupCount++;
-                    } else {
-                        break;
-                    }
-                }
-
-                // สร้างแถวแรกของกลุ่ม (มี rowspan เพื่อจัดกลุ่มคอลัมน์แรก)
+                let currentCompany = renderData[i].companyName;
+                
+                // แทรกแถว Header แยกชื่อบริษัท/สาขา ในตาราง
                 html += `
-                    <tr class="hover:bg-slate-50 transition-colors text-sm">
-                        <td rowspan="${groupCount}" class="border border-slate-200 py-2.5 px-4 text-slate-800 whitespace-nowrap align-top font-bold bg-slate-50/50">${currentItem.rawPaymentMethod}</td>
-                        <td class="border border-slate-200 py-2.5 px-4 text-slate-700 align-top">${currentItem.displayDate}</td>
-                        <td class="border border-slate-200 py-2.5 px-4 text-slate-700 whitespace-nowrap align-top font-medium">${currentItem.docNo}</td>
-                        <td class="border border-slate-200 py-2.5 px-4 whitespace-nowrap align-top ${currentItem.paymentTypeClass}">${currentItem.paymentTypeDisplay}</td>
-                        <td class="border border-slate-200 py-2.5 px-4 text-slate-900 font-semibold text-right align-top">${currentItem.amount}</td>
-                        <td class="border border-slate-200 py-2.5 px-4 align-top whitespace-nowrap">${currentItem.displayStatusHtml}</td>
+                    <tr class="bg-blue-50/60 print:bg-gray-100">
+                        <td colspan="6" class="border-b border-blue-100 py-3 px-4 text-blue-800 font-bold text-[15px]">
+                            <div class="flex items-center">
+                                <svg class="w-5 h-5 mr-2 text-blue-600 print:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+                                ชื่อบริษัท/สาขา: <span class="ml-1 text-slate-800">${currentCompany}</span>
+                            </div>
+                        </td>
                     </tr>
                 `;
 
-                // สร้างแถวถัดไปในกลุ่ม (ไม่ต้องมีคอลัมน์แรก เพราะถูกยุบรวมกับแถวแรกแล้ว)
-                for (let j = 1; j < groupCount; j++) {
-                    let subItem = renderData[i + j];
-                    html += `
-                        <tr class="hover:bg-slate-50 transition-colors text-sm">
-                            <td class="border border-slate-200 py-2.5 px-4 text-slate-700 align-top">${subItem.displayDate}</td>
-                            <td class="border border-slate-200 py-2.5 px-4 text-slate-700 whitespace-nowrap align-top font-medium">${subItem.docNo}</td>
-                            <td class="border border-slate-200 py-2.5 px-4 whitespace-nowrap align-top ${subItem.paymentTypeClass}">${subItem.paymentTypeDisplay}</td>
-                            <td class="border border-slate-200 py-2.5 px-4 text-slate-900 font-semibold text-right align-top">${subItem.amount}</td>
-                            <td class="border border-slate-200 py-2.5 px-4 align-top whitespace-nowrap">${subItem.displayStatusHtml}</td>
-                        </tr>
-                    `;
+                // ดึงข้อมูลทั้งหมดที่อยู่ในบริษัทนี้
+                let compItems = [];
+                while(i < renderData.length && renderData[i].companyName === currentCompany) {
+                    compItems.push(renderData[i]);
+                    i++;
                 }
 
-                i += groupCount; // ข้ามไปกลุ่มถัดไป
+                // จัดกลุ่ม Rowspan หมวดประเภทรายการ ภายในบริษัทนี้
+                let cIdx = 0;
+                while(cIdx < compItems.length) {
+                    let currentItem = compItems[cIdx];
+                    let groupCount = 1;
+
+                    // นับจำนวนแถวที่อยู่ในหมวดประเภทรายการเดียวกัน
+                    for (let j = cIdx + 1; j < compItems.length; j++) {
+                        if (compItems[j].rawPaymentMethod === currentItem.rawPaymentMethod) {
+                            groupCount++;
+                        } else {
+                            break;
+                        }
+                    }
+
+                    // สร้างแถวแรกของกลุ่ม (มี rowspan เพื่อจัดกลุ่มคอลัมน์แรก)
+                    html += `
+                        <tr class="hover:bg-slate-50 transition-colors text-sm">
+                            <td rowspan="${groupCount}" class="border border-slate-200 py-2.5 px-4 text-slate-800 whitespace-nowrap align-top font-bold bg-white">${currentItem.rawPaymentMethod}</td>
+                            <td class="border border-slate-200 py-2.5 px-4 text-slate-700 align-top">${currentItem.displayDate}</td>
+                            <td class="border border-slate-200 py-2.5 px-4 text-slate-700 whitespace-nowrap align-top font-medium">${currentItem.docNo}</td>
+                            <td class="border border-slate-200 py-2.5 px-4 whitespace-nowrap align-top ${currentItem.paymentTypeClass}">${currentItem.paymentTypeDisplay}</td>
+                            <td class="border border-slate-200 py-2.5 px-4 text-slate-900 font-semibold text-right align-top">${currentItem.amount}</td>
+                            <td class="border border-slate-200 py-2.5 px-4 align-top whitespace-nowrap">${currentItem.displayStatusHtml}</td>
+                        </tr>
+                    `;
+
+                    // สร้างแถวถัดไปในกลุ่ม (ไม่ต้องมีคอลัมน์แรก เพราะถูกยุบรวมกับแถวแรกแล้ว)
+                    for (let j = 1; j < groupCount; j++) {
+                        let subItem = compItems[cIdx + j];
+                        html += `
+                            <tr class="hover:bg-slate-50 transition-colors text-sm">
+                                <td class="border border-slate-200 py-2.5 px-4 text-slate-700 align-top">${subItem.displayDate}</td>
+                                <td class="border border-slate-200 py-2.5 px-4 text-slate-700 whitespace-nowrap align-top font-medium">${subItem.docNo}</td>
+                                <td class="border border-slate-200 py-2.5 px-4 whitespace-nowrap align-top ${subItem.paymentTypeClass}">${subItem.paymentTypeDisplay}</td>
+                                <td class="border border-slate-200 py-2.5 px-4 text-slate-900 font-semibold text-right align-top">${subItem.amount}</td>
+                                <td class="border border-slate-200 py-2.5 px-4 align-top whitespace-nowrap">${subItem.displayStatusHtml}</td>
+                            </tr>
+                        `;
+                    }
+
+                    cIdx += groupCount; // ข้ามไปกลุ่มถัดไปภายในบริษัทนี้
+                }
             }
 
             // ถ้าไม่มีข้อมูลตรงกับตัวกรองเลย
